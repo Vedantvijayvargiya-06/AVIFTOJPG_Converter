@@ -375,8 +375,6 @@ Building Pixora helped me gain practical experience in:
 
 ---
 
-\<p align="center">
-&#x20; \*\*Pixora – Convert Images. Keep It Simple.\*\*
-&#x20; \<br>
-&#x20; Built with curiosity, creativity, and AI-assisted development.
-\</p>
+**Pixora – Convert Images. Keep It Simple.**
+
+Built with curiosity, creativity, and AI-assisted development.
