@@ -1,0 +1,6 @@
+{
+  "name": "Pixora - AVIF to JPG Converter",
+  "description": "Convert AVIF to JPG in seconds. Fast, secure, batch image conversion with customizable quality, alpha transparency handling, and instant ZIP download.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

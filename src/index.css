@@ -1,0 +1,61 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+:root {
+  --bg: #FFFFFF;
+  --bg-subtle: #F8FAFC;
+  --surface: #FFFFFF;
+  --surface-muted: #F1F5F9;
+  --border: #E2E8F0;
+  --border-strong: #64748B;
+  --text: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+  --primary: #4F46E5;
+  --primary-hover: #4338CA;
+  --primary-soft: #EEF2FF;
+  --accent: #7C3AED;
+  --success: #15803D;
+  --warning: #B45309;
+  --error: #B91C1C;
+  --info: #0369A1;
+}
+
+:root[data-theme="dark"], .dark {
+  --bg: #0B1020;
+  --bg-subtle: #0F1630;
+  --surface: #121933;
+  --surface-muted: #1A2347;
+  --border: #2A3563;
+  --border-strong: #7C8DB5;
+  --text: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+  --primary: #A5B4FC;
+  --primary-hover: #818CF8;
+  --primary-soft: #1E2A5E;
+  --accent: #A78BFA;
+  --success: #4ADE80;
+  --warning: #FBBF24;
+  --error: #F87171;
+  --info: #38BDF8;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+}
+
+code, kbd, samp, pre, .font-mono {
+  font-family: var(--font-mono);
+}
