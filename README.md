@@ -11,7 +11,7 @@
 
 ## 🌐 Live Demo
 
-**Try Pixora:** [https://pixoraconverter.netlify.app/](https://pixoraconverter.netlify.app/)
+**Try Pixora:** [https://aviftojpg-converter.vercel.app/](https://aviftojpg-converter.vercel.app/)
 
 **Source Code:** [https://github.com/Vedantvijayvargiya-06/AVIFTOJPG_Converter](https://github.com/Vedantvijayvargiya-06/AVIFTOJPG_Converter)
 
@@ -338,7 +338,7 @@ npm test
 
 The public Pixora frontend demo is available at:
 
-**[https://pixoraconverter.netlify.app/](https://pixoraconverter.netlify.app/)**
+**[https://aviftojpg-converter.vercel.app/](https://aviftojpg-converter.vercel.app/)**
 
 The source code is hosted on GitHub.
 
@@ -371,7 +371,7 @@ Building Pixora helped me gain practical experience in:
 
 - GitHub: [@Vedantvijayvargiya-06](https://github.com/Vedantvijayvargiya-06)
 - Project Repository: [AVIFTOJPG_Converter](https://github.com/Vedantvijayvargiya-06/AVIFTOJPG_Converter)
-- Live Demo: [Pixora Converter](https://pixoraconverter.netlify.app/)
+- Live Demo: [Pixora Converter](https://aviftojpg-converter.vercel.app/)
 
 ---
 
