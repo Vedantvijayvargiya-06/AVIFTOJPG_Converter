@@ -2,7 +2,7 @@ import os from 'os';
 import path from 'path';
 
 export const CONFIG = {
-  PORT: 3000,
+  PORT: process.env.NODE_ENV === 'production' && process.env.PORT ? parseInt(process.env.PORT, 10) : 3000,
   STORAGE_DIR: process.env.STORAGE_DIR || path.join(os.tmpdir(), 'pixora'),
   MAX_FILE_SIZE_MB: parseInt(process.env.MAX_FILE_SIZE_MB || '25', 10),
   MAX_FILES_PER_BATCH: parseInt(process.env.MAX_FILES_PER_BATCH || '20', 10),
