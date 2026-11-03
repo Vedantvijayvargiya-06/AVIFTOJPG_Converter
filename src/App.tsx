@@ -22,6 +22,12 @@ import {
 } from './api/client.ts';
 import { validateSingleFile, DEFAULT_LIMITS } from './utils/validation.ts';
 import { generateFileId } from './utils/id.ts';
+import {
+  checkBrowserAvifSupport,
+  checkBackendOnline,
+  convertAvifToJpgClient,
+  buildClientBatchObject,
+} from './utils/clientConverter.ts';
 import type { PublicConfig, ClientFileEntry, BatchObject, ConversionOptions, FileItem } from './types/index.ts';
 
 export default function App() {
@@ -34,8 +40,11 @@ export default function App() {
   const [previewFile, setPreviewFile] = useState<FileItem | null>(null);
   const [modalPage, setModalPage] = useState<'about' | 'contact' | 'privacy' | 'terms' | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const [isBackendOnline, setIsBackendOnline] = useState<boolean | null>(null);
+  const [conversionEngine, setConversionEngine] = useState<'client' | 'server'>('client');
 
   const uploadAbortRef = useRef<(() => void) | null>(null);
+  const clientCancelledRef = useRef<boolean>(false);
   const pollingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const addToast = useCallback((message: string, type: 'info' | 'success' | 'error' = 'info') => {
@@ -47,12 +56,19 @@ export default function App() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  // 1. Fetch public config on load (FR-004)
+  // 1. Fetch public config & detect backend availability on load
   useEffect(() => {
+    checkBackendOnline().then((online) => {
+      setIsBackendOnline(online);
+      if (!online) {
+        setConversionEngine('client');
+      }
+    });
+
     fetchConfig()
       .then((cfg) => setConfig(cfg))
       .catch((err) => {
-        console.warn('Could not fetch server config, using defaults:', err);
+        console.warn('Could not fetch server config, using client defaults:', err);
       });
   }, []);
 
@@ -186,12 +202,94 @@ export default function App() {
     [addToast]
   );
 
-  // 5. Convert Action (Upload -> Start conversion)
+  // 5. Convert Action (Dual Engine: Client In-Browser or Server Sharp)
   const handleStartConversion = useCallback(
     async (options: ConversionOptions) => {
       const readyFiles = selectedFiles.filter((f) => f.status === 'ready');
       if (readyFiles.length === 0) return;
 
+      // CLIENT-SIDE IN-BROWSER CONVERSION (Zero Server, 100% Private, Works on Vercel/Static)
+      if (conversionEngine === 'client' || !isBackendOnline) {
+        clientCancelledRef.current = false;
+        setAppState('processing');
+
+        // Check browser support
+        const supported = await checkBrowserAvifSupport();
+        if (!supported) {
+          addToast(
+            'Your browser does not support decoding AVIF images. Please use Chrome 85+, Safari 16.4+, or Firefox 93+.',
+            'error'
+          );
+          setAppState('idle');
+          return;
+        }
+
+        // Initialize file items in queued state
+        const fileItems: FileItem[] = readyFiles.map((f) => ({
+          fileId: generateFileId(),
+          originalName: f.name,
+          status: 'queued',
+          original: {
+            sizeBytes: f.size,
+            width: 0,
+            height: 0,
+            hasAlpha: false,
+            bitDepth: 8,
+          },
+          output: null,
+          warnings: [],
+          error: null,
+        }));
+
+        let currentBatchObj = buildClientBatchObject(fileItems, options);
+        currentBatchObj.status = 'processing';
+        setCurrentBatch(currentBatchObj);
+
+        // Convert files sequentially
+        for (let i = 0; i < readyFiles.length; i++) {
+          if (clientCancelledRef.current) break;
+
+          fileItems[i].status = 'processing';
+          currentBatchObj = {
+            ...buildClientBatchObject([...fileItems], options),
+            status: 'processing',
+          };
+          setCurrentBatch(currentBatchObj);
+
+          try {
+            const res = await convertAvifToJpgClient(readyFiles[i].file, options);
+            fileItems[i] = res.fileItem;
+          } catch (err: unknown) {
+            fileItems[i].status = 'failed';
+            fileItems[i].error = {
+              code: 'CONVERT_FAILED',
+              message: (err as Error).message || 'Conversion failed in browser',
+            };
+          }
+
+          if (clientCancelledRef.current) break;
+
+          const isLast = i === readyFiles.length - 1;
+          currentBatchObj = {
+            ...buildClientBatchObject([...fileItems], options),
+            status: isLast ? 'completed' : 'processing',
+          };
+          setCurrentBatch(currentBatchObj);
+        }
+
+        if (!clientCancelledRef.current) {
+          const finalBatch = buildClientBatchObject(fileItems, options);
+          setCurrentBatch(finalBatch);
+          setAppState('results');
+          addToast(
+            `Successfully converted ${finalBatch.counts.completed} image${finalBatch.counts.completed === 1 ? '' : 's'} directly in your browser!`,
+            'success'
+          );
+        }
+        return;
+      }
+
+      // SERVER SHARP ENGINE CONVERSION
       setAppState('uploading');
       setUploadProgress({ percent: 0, loadedBytes: 0, totalBytes: 0 });
 
@@ -221,7 +319,7 @@ export default function App() {
         addToast((err as Error).message || 'Conversion failed to start', 'error');
       }
     },
-    [selectedFiles, addToast, startPolling]
+    [selectedFiles, conversionEngine, isBackendOnline, addToast, startPolling]
   );
 
   const handleCancelUpload = useCallback(() => {
@@ -235,6 +333,24 @@ export default function App() {
 
   const handleDeleteBatchNow = useCallback(async () => {
     if (!currentBatch) return;
+
+    if (currentBatch.batchId.startsWith('client_')) {
+      // Clean up in-memory blob URLs
+      currentBatch.files.forEach((f) => {
+        if (f.output?.downloadUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(f.output.downloadUrl);
+        }
+      });
+      if (currentBatch.archive?.downloadUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(currentBatch.archive.downloadUrl);
+      }
+      setCurrentBatch(null);
+      setSelectedFiles([]);
+      setAppState('idle');
+      addToast('Images removed from browser memory.', 'success');
+      return;
+    }
+
     try {
       await deleteBatchFiles(currentBatch.batchId);
       setCurrentBatch(null);
@@ -252,6 +368,20 @@ export default function App() {
     setAppState('idle');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
+
+  const handleCancelProcessing = useCallback(() => {
+    if (currentBatch?.batchId.startsWith('client_')) {
+      clientCancelledRef.current = true;
+      setAppState('idle');
+      setCurrentBatch(null);
+      addToast('Conversion cancelled.', 'info');
+      return;
+    }
+    if (pollingTimerRef.current) {
+      clearTimeout(pollingTimerRef.current);
+    }
+    handleConvertMore();
+  }, [currentBatch, handleConvertMore, addToast]);
 
   const handleScrollToConverter = () => {
     document.getElementById('converter')?.scrollIntoView({ behavior: 'smooth' });
@@ -283,7 +413,7 @@ export default function App() {
           <ProcessingState
             batch={currentBatch}
             isReconnecting={isReconnecting}
-            onCancel={handleConvertMore}
+            onCancel={handleCancelProcessing}
           />
         ) : appState === 'results' && currentBatch ? (
           <ResultsGrid
@@ -305,6 +435,9 @@ export default function App() {
             isUploading={appState === 'uploading'}
             uploadProgress={uploadProgress}
             onCancelUpload={handleCancelUpload}
+            conversionEngine={conversionEngine}
+            onEngineChange={(engine) => setConversionEngine(engine)}
+            isBackendOnline={isBackendOnline}
           />
         )}
 

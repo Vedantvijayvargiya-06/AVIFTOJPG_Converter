@@ -14,6 +14,8 @@ export function ProcessingState({ batch, isReconnecting, onCancel }: ProcessingS
   const totalCount = batch.files.length;
   const percent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
 
+  const isClientBatch = batch.batchId.startsWith('client_');
+
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
       {/* Reconnecting banner if polling suffers temporary network error (FR-053, ERR-06) */}
@@ -42,7 +44,9 @@ export function ProcessingState({ batch, isReconnecting, onCancel }: ProcessingS
               <span>Converting your images...</span>
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-              Sharp processing pipeline: auto-orient, flattening transparency, sRGB color conversion.
+              {isClientBatch
+                ? 'Client-side Canvas engine: decoding AVIF, flattening transparency, and exporting JPEG directly in your browser.'
+                : 'Sharp processing pipeline: auto-orient, flattening transparency, sRGB color conversion.'}
             </p>
           </div>
 
@@ -140,7 +144,7 @@ export function ProcessingState({ batch, isReconnecting, onCancel }: ProcessingS
 
         {/* Footer actions */}
         <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-          <span>Concurrency: 2 simultaneous workers</span>
+          <span>{isClientBatch ? '⚡ Direct In-Browser Engine · Zero Network Uploads' : 'Concurrency: 2 simultaneous workers'}</span>
           <button
             type="button"
             onClick={onCancel}

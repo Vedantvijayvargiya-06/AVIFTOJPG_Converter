@@ -134,10 +134,21 @@ export async function checkFileHead(url: string): Promise<boolean> {
 }
 
 export async function fetchSampleAvifFile(): Promise<File> {
-  const res = await fetch(`${API_BASE}/sample`);
-  if (!res.ok) {
-    throw new Error('Failed to retrieve sample AVIF');
+  try {
+    const res = await fetch(`${API_BASE}/sample`);
+    if (res.ok) {
+      const blob = await res.blob();
+      return new File([blob], 'sample-photo.avif', { type: 'image/avif' });
+    }
+  } catch {
+    // Backend offline; fall through to static public asset
   }
-  const blob = await res.blob();
+
+  // Fallback to static public file (works on Vercel, Netlify, GitHub Pages)
+  const staticRes = await fetch('/sample-photo.avif');
+  if (!staticRes.ok) {
+    throw new Error('Failed to retrieve sample AVIF file.');
+  }
+  const blob = await staticRes.blob();
   return new File([blob], 'sample-photo.avif', { type: 'image/avif' });
 }

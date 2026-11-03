@@ -10,9 +10,11 @@ import {
   Clock,
   Loader2,
   FileX,
+  ShieldCheck,
 } from 'lucide-react';
 import { formatBytes, formatTimeRemaining, formatSizeDelta } from '../utils/format.ts';
 import { checkFileHead, prepareArchive } from '../api/client.ts';
+import { generateClientZip } from '../utils/clientConverter.ts';
 import type { BatchObject, FileItem } from '../types/index.ts';
 
 interface ResultsGridProps {
@@ -34,6 +36,8 @@ export function ResultsGrid({
   const [isExpired, setIsExpired] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [downloadingFileId, setDownloadingFileId] = useState<string | null>(null);
+
+  const isClientBatch = batch.batchId.startsWith('client_');
 
   // Expiry countdown calculation (FR-045)
   useEffect(() => {
@@ -61,11 +65,13 @@ export function ResultsGrid({
     setDownloadingFileId(file.fileId);
 
     try {
-      const isAvailable = await checkFileHead(file.output.downloadUrl);
-      if (!isAvailable) {
-        onToast('File expired or unavailable. Please upload again.', 'error');
-        setDownloadingFileId(null);
-        return;
+      if (!file.output.downloadUrl.startsWith('blob:')) {
+        const isAvailable = await checkFileHead(file.output.downloadUrl);
+        if (!isAvailable) {
+          onToast('File expired or unavailable. Please upload again.', 'error');
+          setDownloadingFileId(null);
+          return;
+        }
       }
 
       // Trigger browser download via invisible anchor
@@ -90,17 +96,41 @@ export function ResultsGrid({
     onToast('Preparing ZIP archive...', 'info');
 
     try {
-      const archive = await prepareArchive(batch.batchId);
-      if (archive?.downloadUrl) {
+      if (isClientBatch) {
+        // In-browser client ZIP generation with JSZip
+        const filesForZip = await Promise.all(
+          completedFiles.map(async (f) => {
+            const resp = await fetch(f.output!.downloadUrl);
+            const blob = await resp.blob();
+            return {
+              filename: f.output!.filename,
+              blob,
+            };
+          })
+        );
+
+        const clientZip = await generateClientZip(filesForZip);
         const link = document.createElement('a');
-        link.href = archive.downloadUrl;
-        link.setAttribute('download', archive.filename);
+        link.href = clientZip.url;
+        link.setAttribute('download', clientZip.filename);
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        onToast('ZIP archive download started!', 'success');
+        onToast('ZIP archive downloaded directly from browser memory!', 'success');
       } else {
-        onToast('Could not generate ZIP archive.', 'error');
+        // Server ZIP generation via Sharp/archiver
+        const archive = await prepareArchive(batch.batchId);
+        if (archive?.downloadUrl) {
+          const link = document.createElement('a');
+          link.href = archive.downloadUrl;
+          link.setAttribute('download', archive.filename);
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          onToast('ZIP archive download started!', 'success');
+        } else {
+          onToast('Could not generate ZIP archive.', 'error');
+        }
       }
     } catch (err: unknown) {
       onToast((err as Error).message || 'Failed to create ZIP archive.', 'error');
@@ -161,17 +191,24 @@ export function ResultsGrid({
             </div>
           </div>
 
-          {/* Expiry countdown badge (FR-045) */}
-          <div
-            className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold tabular-nums ${
-              isUnderFiveMinutes
-                ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-            }`}
-          >
-            <Clock className="w-4 h-4 text-indigo-500" />
-            <span>Files auto-delete in {formatTimeRemaining(secondsRemaining)}</span>
-          </div>
+          {/* Badge: In-browser privacy vs server expiry countdown */}
+          {isClientBatch ? (
+            <div className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>In-Browser Memory • 100% Private (No Server Uploads)</span>
+            </div>
+          ) : (
+            <div
+              className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold tabular-nums ${
+                isUnderFiveMinutes
+                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 animate-pulse'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+              }`}
+            >
+              <Clock className="w-4 h-4 text-indigo-500" />
+              <span>Files auto-delete in {formatTimeRemaining(secondsRemaining)}</span>
+            </div>
+          )}
         </div>
 
         {/* Global batch actions */}

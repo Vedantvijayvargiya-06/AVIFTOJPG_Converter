@@ -10,6 +10,8 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  ShieldCheck,
+  Zap,
 } from 'lucide-react';
 import { formatBytes } from '../utils/format.ts';
 import { validateSingleFile } from '../utils/validation.ts';
@@ -26,6 +28,9 @@ interface UploadWorkspaceProps {
   isUploading: boolean;
   uploadProgress: { percent: number; loadedBytes: number; totalBytes: number };
   onCancelUpload: () => void;
+  conversionEngine?: 'client' | 'server';
+  onEngineChange?: (engine: 'client' | 'server') => void;
+  isBackendOnline?: boolean | null;
 }
 
 export function UploadWorkspace({
@@ -39,6 +44,9 @@ export function UploadWorkspace({
   isUploading,
   uploadProgress,
   onCancelUpload,
+  conversionEngine = 'client',
+  onEngineChange,
+  isBackendOnline = false,
 }: UploadWorkspaceProps) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -131,6 +139,50 @@ export function UploadWorkspace({
         className="hidden"
         aria-label="Upload AVIF files"
       />
+
+      {/* Engine Selection & Privacy Mode Pill */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-2">
+        <div className="flex items-center gap-2">
+          {conversionEngine === 'client' ? (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>In-Browser Engine Active · 100% Private (Zero Server Uploads)</span>
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+              <Zap className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+              <span>Server Engine Active · Node.js Sharp Pipeline</span>
+            </span>
+          )}
+        </div>
+
+        {isBackendOnline && onEngineChange && (
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200/80 dark:border-slate-700 text-xs">
+            <button
+              type="button"
+              onClick={() => onEngineChange('client')}
+              className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                conversionEngine === 'client'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              In-Browser
+            </button>
+            <button
+              type="button"
+              onClick={() => onEngineChange('server')}
+              className={`px-2.5 py-1 rounded-md font-medium transition-all cursor-pointer ${
+                conversionEngine === 'server'
+                  ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-xs font-semibold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              Server (Sharp)
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Main Dropzone Card (FR-002, FR-003, FR-012) */}
       <div
@@ -469,6 +521,10 @@ export function UploadWorkspace({
             >
               {isUploading
                 ? 'Uploading images...'
+                : conversionEngine === 'client'
+                ? validFiles.length === 1
+                  ? 'Convert 1 Image (In Browser)'
+                  : `Convert ${validFiles.length} Images (In Browser)`
                 : validFiles.length === 1
                 ? 'Convert 1 Image to JPG'
                 : `Convert ${validFiles.length} Images to JPG`}
